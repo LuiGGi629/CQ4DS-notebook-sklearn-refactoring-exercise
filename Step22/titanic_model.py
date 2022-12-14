@@ -1,34 +1,32 @@
 import os
 import pickle
-import typer
+
 import numpy as np
 import pandas as pd
+import typer
 from pydantic import BaseModel
+from sklearn.impute import KNNImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, RobustScaler
 from sqlalchemy import create_engine
 
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import RobustScaler
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.impute import KNNImputer
-from sklearn.metrics import confusion_matrix
-
-
 RARE_TITLES = {
-    'Capt',
-    'Col',
-    'Don',
-    'Dona',
-    'Dr',
-    'Jonkheer',
-    'Lady',
-    'Major',
-    'Mlle',
-    'Mme',
-    'Ms',
-    'Rev',
-    'Sir',
-    'the Countess',
+    "Capt",
+    "Col",
+    "Don",
+    "Dona",
+    "Dr",
+    "Jonkheer",
+    "Lady",
+    "Major",
+    "Mlle",
+    "Mme",
+    "Ms",
+    "Rev",
+    "Sir",
+    "the Countess",
 }
 
 
@@ -47,13 +45,13 @@ class Passenger(BaseModel):
 
 def do_test(filename, data):
     if not os.path.isfile(filename):
-        pickle.dump(data, open(filename, 'wb'))
-    truth = pickle.load(open(filename, 'rb'))
+        pickle.dump(data, open(filename, "wb"))
+    truth = pickle.load(open(filename, "rb"))
     try:
         np.testing.assert_almost_equal(data, truth)
-        print(f'{filename} test passed')
+        print(f"{filename} test passed")
     except AssertionError as ex:
-        print(f'{filename} test failed {ex}')
+        print(f"{filename} test failed {ex}")
 
 
 def do_pandas_test(filename, data):
@@ -62,9 +60,9 @@ def do_pandas_test(filename, data):
     truth = pd.read_pickle(filename)
     try:
         pd.testing.assert_frame_equal(data, truth)
-        print(f'{filename} pandas test passed')
+        print(f"{filename} pandas test passed")
     except AssertionError as ex:
-        print(f'{filename} pandas test failed {ex}')
+        print(f"{filename} pandas test failed {ex}")
 
 
 class SqlLoader:
@@ -113,8 +111,8 @@ class ModelSaver:
         self.result_filename = result_filename
 
     def save_model(self, model, result):
-        pickle.dump(model, open(self.filename, 'wb'))
-        pickle.dump(result, open(self.result_filename, 'wb'))
+        pickle.dump(model, open(self.filename, "wb"))
+        pickle.dump(result, open(self.result_filename, "wb"))
 
 
 class TestModelSaver:
@@ -122,12 +120,12 @@ class TestModelSaver:
         pass
 
     def save_model(self, model, result):
-        do_test('../data/cm_test.pkl', result['cm_test'])
-        do_test('../data/cm_train.pkl', result['cm_train'])
-        X_train_processed = model.process_inputs(result['train_passengers'])
-        do_test('../data/X_train_processed.pkl', X_train_processed)
-        X_test_processed = model.process_inputs(result['test_passengers'])
-        do_test('../data/X_test_processed.pkl', X_test_processed)
+        do_test("../data/cm_test.pkl", result["cm_test"])
+        do_test("../data/cm_train.pkl", result["cm_train"])
+        X_train_processed = model.process_inputs(result["train_passengers"])
+        do_test("../data/X_train_processed.pkl", X_train_processed)
+        X_test_processed = model.process_inputs(result["test_passengers"])
+        do_test("../data/X_test_processed.pkl", X_test_processed)
 
 
 class PassengerLoader:
@@ -141,7 +139,7 @@ class PassengerLoader:
             # parch = Parents/Children, sibsp = Siblings/Spouses
             family_size = int(data.parch + data.sibsp)
             # Allen, Miss. Elisabeth Walton
-            title = data.name.split(',')[1].split('.')[0].strip()
+            title = data.name.split(",")[1].split(".")[0].strip()
             passenger = Passenger(
                 pid=int(data.pid),
                 pclass=int(data.pclass),
@@ -151,7 +149,7 @@ class PassengerLoader:
                 fare=float(data.fare),
                 embarked=str(data.embarked),
                 is_alone=1 if family_size == 1 else 0,
-                title='rare' if title in self.rare_titles else title,
+                title="rare" if title in self.rare_titles else title,
                 is_survived=int(data.is_survived),
             )
             passengers.append(passenger)
@@ -163,25 +161,21 @@ class TitanicModel:
         if predictor is None:
             predictor = LogisticRegression(random_state=0)
         self.trained = False
-        self.one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)
+        self.one_hot_encoder = OneHotEncoder(handle_unknown="ignore", sparse=False)
         self.knn_imputer = KNNImputer(n_neighbors=n_neighbors)
         self.robust_scaler = RobustScaler()
         self.predictor = predictor
 
     def process_inputs(self, passengers):
         data = pd.DataFrame([v.dict() for v in passengers])
-        categorical_data = data[['embarked', 'sex', 'pclass', 'title', 'is_alone']]
-        numerical_data = data[['age', 'fare', 'family_size']]
+        categorical_data = data[["embarked", "sex", "pclass", "title", "is_alone"]]
+        numerical_data = data[["age", "fare", "family_size"]]
         if self.trained:
             categorical_data = self.one_hot_encoder.transform(categorical_data)
-            numerical_data = self.robust_scaler.transform(
-                self.knn_imputer.transform(numerical_data)
-            )
+            numerical_data = self.robust_scaler.transform(self.knn_imputer.transform(numerical_data))
         else:
             categorical_data = self.one_hot_encoder.fit_transform(categorical_data)
-            numerical_data = self.robust_scaler.fit_transform(
-                self.knn_imputer.fit_transform(numerical_data)
-            )
+            numerical_data = self.robust_scaler.fit_transform(self.knn_imputer.fit_transform(numerical_data))
         return np.hstack((categorical_data, numerical_data))
 
     def train(self, passengers):
@@ -218,48 +212,44 @@ class TitanicModelCreator:
         # --- TRAINING ---
         self.model.train(train_passengers)
         y_train_estimation = self.model.estimate(train_passengers)
-        cm_train = confusion_matrix(
-            [v.is_survived for v in train_passengers], y_train_estimation
-        )
+        cm_train = confusion_matrix([v.is_survived for v in train_passengers], y_train_estimation)
 
         # --- TESTING ---
         y_test_estimation = self.model.estimate(test_passengers)
-        cm_test = confusion_matrix(
-            [v.is_survived for v in test_passengers], y_test_estimation
-        )
+        cm_test = confusion_matrix([v.is_survived for v in test_passengers], y_test_estimation)
 
         self.model_saver.save_model(
             model=self.model,
             result={
-                'cm_train': cm_train,
-                'cm_test': cm_test,
-                'train_passengers': train_passengers,
-                'test_passengers': test_passengers,
+                "cm_train": cm_train,
+                "cm_test": cm_test,
+                "train_passengers": train_passengers,
+                "test_passengers": test_passengers,
             },
         )
 
 
-def main(param: str = 'pass'):
+def main(param: str = "pass"):
     titanic_model_creator = TitanicModelCreator(
         loader=PassengerLoader(
-            loader=SqlLoader(connection_string='sqlite:///../data/titanic.db'),
+            loader=SqlLoader(connection_string="sqlite:///../data/titanic.db"),
             rare_titles=RARE_TITLES,
         ),
         model=TitanicModel(),
         model_saver=ModelSaver(
-            model_filename='../data/real_model.pkl',
-            result_filename='../data/real_result.pkl',
+            model_filename="../data/real_model.pkl",
+            result_filename="../data/real_result.pkl",
         ),
     )
     titanic_model_creator.run()
 
 
-def test_main(param: str = 'pass'):
+def test_main(param: str = "pass"):
     titanic_model_creator = TitanicModelCreator(
         loader=PassengerLoader(
             loader=TestLoader(
-                passengers_filename='../data/passengers_with_is_survived.pkl',
-                real_loader=SqlLoader(connection_string='sqlite:///../data/titanic.db'),
+                passengers_filename="../data/passengers_with_is_survived.pkl",
+                real_loader=SqlLoader(connection_string="sqlite:///../data/titanic.db"),
             ),
             rare_titles=RARE_TITLES,
         ),
