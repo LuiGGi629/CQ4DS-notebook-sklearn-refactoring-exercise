@@ -1,1 +1,1 @@
-python3.8 ./titanic_model.py $1
+python ./titanic_model.py $1
